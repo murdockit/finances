@@ -8,7 +8,7 @@ services:
     ports:
       - "5433:5432"
     networks:
-      - finances_net
+      - containers
     volumes:
       - finances_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,23 +29,23 @@ services:
       db:
         condition: service_healthy
     networks:
-      - finances_net
+      - containers
 
   web:
     build:
       context: .
     environment:
-      VITE_API_BASE_URL: http://localhost:8081
+      VITE_API_BASE_URL: http://172.20.0.4:8081
     ports:
       - "5173:5173"
     depends_on:
       - api
     networks:
-      - finances_net
+      - containers
 
 volumes:
   finances_data:
 
 networks:
-  finances_net:
-    name: finances_net
+  containers:
+    name: containers

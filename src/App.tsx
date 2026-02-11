@@ -3,6 +3,7 @@ import { parseCsv } from "./lib/csv";
 import { applyRules, categorizeTransaction } from "./lib/rules";
 import { defaultRules } from "./lib/sampleRules";
 import { loadRules, saveRules } from "./lib/storage";
+import { createUuid } from "./lib/uuid";
 import {
   fetchImports,
   fetchTransactions,
@@ -106,7 +107,7 @@ export default function App() {
     setStatus("Parsing CSV...");
     const result = await parseCsv(file);
     const importRecord: ImportRecord = {
-      id: crypto.randomUUID(),
+      id: createUuid(),
       fileName: file.name,
       importedAt: new Date().toISOString(),
     };

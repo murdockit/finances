@@ -1,7 +1,7 @@
 import { ImportRecord, Transaction } from "./types";
 
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL?.toString() ?? "http://localhost:8080";
+  import.meta.env.VITE_API_BASE_URL?.toString() ?? "http://localhost:8081";
 
 export async function fetchImports(): Promise<ImportRecord[]> {
   const response = await fetch(`${API_BASE}/imports`);

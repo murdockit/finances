@@ -27,6 +27,9 @@ export function applyRules(
     if (tx.manual) {
       return tx;
     }
+    if (tx.amount >= 0) {
+      return tx;
+    }
     return { ...tx, category: categorizeTransaction(tx, rules) };
   });
 }

@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: finances
     ports:
       - "5433:5432"
+    networks:
+      - finances_net
     volumes:
       - finances_data:/var/lib/postgresql/data
 
@@ -20,6 +22,8 @@ services:
       - "8081:8081"
     depends_on:
       - db
+    networks:
+      - finances_net
 
   web:
     build:
@@ -30,6 +34,12 @@ services:
       - "5173:5173"
     depends_on:
       - api
+    networks:
+      - finances_net
 
 volumes:
   finances_data:
+
+networks:
+  finances_net:
+    name: finances_net

@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: finances
+      POSTGRES_PASSWORD: finances
+      POSTGRES_DB: finances
+    ports:
+      - "5432:5432"
+    volumes:
+      - finances_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./server
+    environment:
+      DATABASE_URL: postgres://finances:finances@db:5432/finances
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: .
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080
+    ports:
+      - "4173:4173"
+    depends_on:
+      - api
+
+volumes:
+  finances_data:

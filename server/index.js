@@ -13,6 +13,7 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
+await waitForDb();
 await initDb();
 
 app.get("/health", (_req, res) => {
@@ -169,4 +170,20 @@ async function initDb() {
   await pool.query(
     "CREATE INDEX IF NOT EXISTS transactions_import_idx ON transactions(import_id);"
   );
+}
+
+async function waitForDb() {
+  const maxAttempts = 12;
+  const delayMs = 2000;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await pool.query("SELECT 1;");
+      return;
+    } catch (error) {
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
 }

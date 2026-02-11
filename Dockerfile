@@ -13,7 +13,7 @@ RUN npm run build
 FROM node:20-alpine
 WORKDIR /app
 COPY --from=build /app/dist /app/dist
+COPY --from=build /app/node_modules /app/node_modules
 COPY package.json /app/package.json
-RUN npm install --omit=dev
 EXPOSE 5173
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]
+CMD ["./node_modules/.bin/vite", "preview", "--host", "0.0.0.0", "--port", "5173"]

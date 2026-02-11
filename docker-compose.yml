@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: finances
       POSTGRES_DB: finances
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - finances_data:/var/lib/postgresql/data
 
@@ -15,9 +15,9 @@ services:
       context: ./server
     environment:
       DATABASE_URL: postgres://finances:finances@db:5432/finances
-      PORT: 8080
+      PORT: 8081
     ports:
-      - "8080:8080"
+      - "8081:8081"
     depends_on:
       - db
 
@@ -25,9 +25,9 @@ services:
     build:
       context: .
     environment:
-      VITE_API_BASE_URL: http://localhost:8080
+      VITE_API_BASE_URL: http://localhost:8081
     ports:
-      - "4173:4173"
+      - "5173:5173"
     depends_on:
       - api
 

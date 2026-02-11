@@ -9,8 +9,9 @@ Imports are saved in the browser database (IndexedDB) so you can revisit trends 
 ## Docker
 Run everything (frontend, API, Postgres):
 1. `docker compose up -d`
-2. App: http://localhost:4173
-3. API: http://localhost:8080/health
+2. App: http://localhost:5173
+3. API: http://localhost:8081/health
+4. Postgres: localhost:5433
 
 ## CSV format
 No header row, 6 columns in order:

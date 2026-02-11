@@ -15,5 +15,5 @@ WORKDIR /app
 COPY --from=build /app/dist /app/dist
 COPY package.json /app/package.json
 RUN npm install --omit=dev
-EXPOSE 4173
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]
+EXPOSE 5173
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5173"]

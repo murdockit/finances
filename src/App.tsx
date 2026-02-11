@@ -7,6 +7,8 @@ import { createUuid } from "./lib/uuid";
 import {
   fetchImports,
   fetchTransactions,
+  deleteImport,
+  deleteAllImports,
   saveImportPayload,
   updateTransactionCategory,
 } from "./lib/api";
@@ -24,6 +26,13 @@ export default function App() {
   const [errors, setErrors] = useState<string[]>([]);
   const [status, setStatus] = useState<string>("Upload a CSV to begin.");
   const [backendError, setBackendError] = useState<string>("");
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  const [merchantQuery, setMerchantQuery] = useState<string>("");
+  const [merchantSelections, setMerchantSelections] = useState<
+    Record<string, string>
+  >({});
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [selectedImportIds, setSelectedImportIds] = useState<Set<string>>(
@@ -66,6 +75,21 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleOnline() {
+      setIsOnline(true);
+    }
+    function handleOffline() {
+      setIsOnline(false);
+    }
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   const categories = useMemo(() => {
     const list = rules.map((rule) => rule.category);
     if (!list.includes("Uncategorized")) {
@@ -98,6 +122,40 @@ export default function App() {
       .reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     return total;
   }, [filteredTransactions]);
+
+  const uncategorizedMerchants = useMemo(() => {
+    const groups = new Map<
+      string,
+      { key: string; count: number; sample: string }
+    >();
+    for (const tx of allTransactions) {
+      if (tx.category !== "Uncategorized") {
+        continue;
+      }
+      const key = toMerchantKeyword(tx.description);
+      if (!key) {
+        continue;
+      }
+      const existing = groups.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        groups.set(key, { key, count: 1, sample: tx.description });
+      }
+    }
+    const list = Array.from(groups.values()).sort(
+      (a, b) => b.count - a.count
+    );
+    if (!merchantQuery.trim()) {
+      return list;
+    }
+    const needle = merchantQuery.trim().toLowerCase();
+    return list.filter(
+      (item) =>
+        item.key.toLowerCase().includes(needle) ||
+        item.sample.toLowerCase().includes(needle)
+    );
+  }, [allTransactions, merchantQuery]);
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -173,6 +231,44 @@ export default function App() {
     setAllTransactions(updated);
   }
 
+  function addMerchantRule(keyword: string, category: string) {
+    if (!keyword || !category) {
+      return;
+    }
+    const normalizedKeyword = keyword.toLowerCase();
+    const existingIndex = rules.findIndex(
+      (rule) => rule.category === category
+    );
+    let nextRules = rules;
+    if (existingIndex >= 0) {
+      const rule = rules[existingIndex];
+      if (
+        rule.keywords.some(
+          (item) => item.trim().toLowerCase() === normalizedKeyword
+        )
+      ) {
+        return;
+      }
+      const updatedRule = {
+        ...rule,
+        keywords: [...rule.keywords, normalizedKeyword],
+      };
+      nextRules = [
+        ...rules.slice(0, existingIndex),
+        updatedRule,
+        ...rules.slice(existingIndex + 1),
+      ];
+    } else {
+      nextRules = [
+        ...rules,
+        { category, keywords: [normalizedKeyword] },
+      ];
+    }
+    setRules(nextRules);
+    saveRules(nextRules);
+    setAllTransactions(applyRules(allTransactions, nextRules));
+  }
+
   function toggleImportSelection(id: string) {
     setSelectedImportIds((current) => {
       const next = new Set(current);
@@ -183,6 +279,140 @@ export default function App() {
       }
       return next;
     });
+  }
+
+  async function handleDeleteImport(id: string) {
+    const target = imports.find((item) => item.id === id);
+    const confirmText = target
+      ? `Delete ${target.fileName} and its transactions?`
+      : "Delete this import and its transactions?";
+    if (!window.confirm(confirmText)) {
+      return;
+    }
+    try {
+      await deleteImport(id);
+      setImports((current) => current.filter((item) => item.id !== id));
+      setAllTransactions((current) =>
+        current.filter((tx) => tx.importId !== id)
+      );
+      setSelectedImportIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+      setBackendError("");
+    } catch (error) {
+      console.error(error);
+      setBackendError("Failed to delete import.");
+    }
+  }
+
+  function handleApplyMerchantRule(keyword: string) {
+    const selection = merchantSelections[keyword];
+    if (!selection) {
+      setBackendError("Choose a category before adding a rule.");
+      return;
+    }
+    addMerchantRule(keyword, selection);
+    setBackendError("");
+    setMerchantSelections((current) => {
+      const next = { ...current };
+      delete next[keyword];
+      return next;
+    });
+  }
+
+  function handleApplyAllMerchantRules() {
+    const entries = Object.entries(merchantSelections).filter(
+      ([, category]) => category
+    );
+    if (entries.length === 0) {
+      setBackendError("Select at least one merchant category.");
+      return;
+    }
+    for (const [keyword, category] of entries) {
+      addMerchantRule(keyword, category);
+    }
+    setBackendError("");
+    setMerchantSelections({});
+  }
+
+  async function handleDeleteAllImports() {
+    if (!window.confirm("Delete all imports and transactions?")) {
+      return;
+    }
+    try {
+      await deleteAllImports();
+      setImports([]);
+      setAllTransactions([]);
+      setSelectedImportIds(new Set());
+      setBackendError("");
+      setStatus("All imports deleted.");
+    } catch (error) {
+      console.error(error);
+      setBackendError("Failed to delete all imports.");
+    }
+  }
+
+  function handleExportJson() {
+    const payload = {
+      exportsAt: new Date().toISOString(),
+      imports,
+      transactions: allTransactions.map((tx) => ({
+        ...tx,
+        date: tx.date.toISOString(),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "finances-export.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleExportCsv() {
+    const rows = [
+      [
+        "id",
+        "importId",
+        "date",
+        "description",
+        "amount",
+        "category",
+        "manual",
+        "rawType",
+        "location",
+      ],
+      ...filteredTransactions.map((tx) => [
+        tx.id,
+        tx.importId,
+        tx.date.toISOString(),
+        tx.description,
+        tx.amount.toString(),
+        tx.category,
+        String(tx.manual ?? false),
+        tx.rawType ?? "",
+        tx.location ?? "",
+      ]),
+    ];
+    const csv = rows
+      .map((row) =>
+        row
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "finances-transactions.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -201,6 +431,11 @@ export default function App() {
             <input type="file" accept=".csv" onChange={handleFileChange} />
             <span>Choose CSV</span>
           </label>
+          {!isOnline && (
+            <p className="error-text">
+              Offline: changes will not sync to the backend.
+            </p>
+          )}
           <p className="muted">{status}</p>
           {backendError && <p className="error-text">{backendError}</p>}
           {filteredTransactions.length > 0 && (
@@ -225,21 +460,35 @@ export default function App() {
               ) : (
                 <div className="import-list">
                   {imports.map((item) => (
-                    <label key={item.id} className="import-item">
-                      <input
-                        type="checkbox"
-                        checked={selectedImportIds.has(item.id)}
-                        onChange={() => toggleImportSelection(item.id)}
-                      />
-                      <span>
-                        {item.fileName}
-                        <small>
-                          {new Date(item.importedAt).toLocaleDateString()}
-                        </small>
-                      </span>
-                    </label>
+                    <div key={item.id} className="import-item">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selectedImportIds.has(item.id)}
+                          onChange={() => toggleImportSelection(item.id)}
+                        />
+                        <span>
+                          {item.fileName}
+                          <small>
+                            {new Date(item.importedAt).toLocaleDateString()}
+                          </small>
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => handleDeleteImport(item.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   ))}
                 </div>
+              )}
+              {imports.length > 0 && (
+                <button type="button" onClick={handleDeleteAllImports}>
+                  Delete All Imports
+                </button>
               )}
             </div>
             <div className="filter-card">
@@ -268,12 +517,82 @@ export default function App() {
 
         <Charts transactions={filteredTransactions} />
 
+        <div className="merchant-card">
+          <div className="merchant-header">
+            <div>
+              <h3>Merchant Auto-Categorize</h3>
+              <p className="muted">
+                Search uncategorized merchants and add rules with one click.
+              </p>
+            </div>
+            <div className="merchant-actions">
+              <input
+                type="text"
+                placeholder="Search merchants"
+                value={merchantQuery}
+                onChange={(event) => setMerchantQuery(event.target.value)}
+              />
+              <button type="button" onClick={handleApplyAllMerchantRules}>
+                Apply Selected
+              </button>
+            </div>
+          </div>
+          {uncategorizedMerchants.length === 0 ? (
+            <p className="muted">No uncategorized merchants found.</p>
+          ) : (
+            <div className="merchant-list">
+              {uncategorizedMerchants.slice(0, 20).map((item) => (
+                <div key={item.key} className="merchant-row">
+                  <div>
+                    <strong>{item.key}</strong>
+                    <small>{item.count} transactions</small>
+                  </div>
+                  <select
+                    value={merchantSelections[item.key] ?? ""}
+                    onChange={(event) =>
+                      setMerchantSelections((current) => ({
+                        ...current,
+                        [item.key]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => handleApplyMerchantRule(item.key)}
+                  >
+                    Add Rule
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {uncategorizedMerchants.length > 20 && (
+            <p className="muted">
+              Showing top 20 merchants. Refine the search to find more.
+            </p>
+          )}
+        </div>
+
         <div className="actions">
           <button type="button" onClick={reapplyRules}>
             Reapply Rules
           </button>
           <button type="button" onClick={resetManualOverrides}>
             Reset Manual Overrides
+          </button>
+          <button type="button" onClick={handleExportJson}>
+            Export JSON
+          </button>
+          <button type="button" onClick={handleExportCsv}>
+            Export CSV
           </button>
         </div>
 
@@ -333,3 +652,100 @@ function formatMoney(amount: number): string {
   });
   return formatter.format(amount);
 }
+
+function toMerchantKeyword(description: string): string {
+  const cleaned = description
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  let tokens = cleaned.split(" ").filter((word) => word.length > 1);
+
+  if (tokens.length === 0) {
+    return "";
+  }
+
+  const last = tokens[tokens.length - 1];
+  if (STATE_CODES.has(last)) {
+    tokens = tokens.slice(0, -1);
+    const maybeCity = tokens[tokens.length - 1];
+    if (maybeCity && /^[a-z]+$/.test(maybeCity) && maybeCity.length >= 3) {
+      tokens = tokens.slice(0, -1);
+    }
+  }
+
+  const filtered: string[] = [];
+  for (const token of tokens) {
+    if (/\d/.test(token)) {
+      continue;
+    }
+    if (!/[a-z]/.test(token)) {
+      continue;
+    }
+    if (token === "pos" || token === "wdr" || token === "dbt") {
+      continue;
+    }
+    if (!filtered.includes(token)) {
+      filtered.push(token);
+    }
+  }
+
+  return filtered.slice(0, 3).join(" ");
+}
+
+const STATE_CODES = new Set([
+  "al",
+  "ak",
+  "az",
+  "ar",
+  "ca",
+  "co",
+  "ct",
+  "de",
+  "fl",
+  "ga",
+  "hi",
+  "id",
+  "il",
+  "in",
+  "ia",
+  "ks",
+  "ky",
+  "la",
+  "me",
+  "md",
+  "ma",
+  "mi",
+  "mn",
+  "ms",
+  "mo",
+  "mt",
+  "ne",
+  "nv",
+  "nh",
+  "nj",
+  "nm",
+  "ny",
+  "nc",
+  "nd",
+  "oh",
+  "ok",
+  "or",
+  "pa",
+  "ri",
+  "sc",
+  "sd",
+  "tn",
+  "tx",
+  "ut",
+  "vt",
+  "va",
+  "wa",
+  "wv",
+  "wi",
+  "wy",
+]);

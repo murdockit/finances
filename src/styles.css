@@ -127,7 +127,14 @@ h3 {
   display: flex;
   gap: 8px;
   align-items: center;
+  justify-content: space-between;
   font-size: 0.9rem;
+}
+
+.import-item label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .import-item span {
@@ -166,6 +173,58 @@ h3 {
   padding: 16px;
 }
 
+.merchant-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.merchant-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.merchant-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.merchant-actions input {
+  min-width: 220px;
+}
+
+.merchant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.merchant-row {
+  display: grid;
+  grid-template-columns: 1fr 200px auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff7ef;
+}
+
+.merchant-row small {
+  color: var(--muted);
+  display: block;
+  font-size: 0.75rem;
+}
+
 .actions {
   display: flex;
   gap: 12px;
@@ -184,6 +243,19 @@ button {
 
 button:nth-of-type(2) {
   background: var(--accent-2);
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent-2);
+  padding: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
 }
 
 .rules {
@@ -295,6 +367,10 @@ td {
   }
 
   .rule-row {
+    grid-template-columns: 1fr;
+  }
+
+  .merchant-row {
     grid-template-columns: 1fr;
   }
 }

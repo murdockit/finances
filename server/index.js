@@ -27,6 +27,28 @@ app.get("/imports", async (_req, res) => {
   res.json(result.rows);
 });
 
+app.delete("/imports", async (_req, res) => {
+  await pool.query("DELETE FROM transactions");
+  await pool.query("DELETE FROM imports");
+  res.json({ ok: true });
+});
+
+app.delete("/imports/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    res.status(400).json({ error: "Missing import id." });
+    return;
+  }
+
+  await pool.query("DELETE FROM transactions WHERE import_id = $1", [id]);
+  const result = await pool.query("DELETE FROM imports WHERE id = $1", [id]);
+  if (result.rowCount === 0) {
+    res.status(404).json({ error: "Import not found." });
+    return;
+  }
+  res.json({ ok: true });
+});
+
 app.post("/imports", async (req, res) => {
   const { import: importRecord, transactions } = req.body ?? {};
   if (!importRecord || !Array.isArray(transactions)) {
